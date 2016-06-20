@@ -130,6 +130,7 @@ def run_case():
     plot.xticks([0, 20, 40, 60, 80, 100], ['0.0', '0.2', '0.4', '0.6', '0.8', '1.0'])
     plot.ylabel('Regressed variable $(\psi)$')
     plot.xlabel('Input variable $(x)$')
+    plot.legend(['$\mathbb{E}[\phi^*]$', '$\psi$', '$f(x)$'], fontsize=7)
     plot.tight_layout()
 
     holl_score = 0.
@@ -138,8 +139,8 @@ def run_case():
 
     print 'HOLL Score: ' + str(holl_score)
 
-    fig.savefig('./results/uni_model0_mgvm.pdf')
-    np.save('./results/uni_model0_mgvm', (results, config))
+    fig.savefig('../results/uni_model0_mgvm.pdf')
+    np.save('../results/uni_model0_mgvm', (results, config))
     plot.show()
 
     print('Finished running case!')

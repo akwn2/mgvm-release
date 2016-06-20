@@ -108,6 +108,7 @@ def run_case():
 
     plot.ylabel('Regressed variable $(\psi)$')
     plot.xlabel('Input variable $(x)$')
+    plot.legend(['$\mathbb{E}[\phi^*]$', '$\psi$', '$f(x)$'], fontsize=7)
     plot.tight_layout()
     plot.grid(True)
 
@@ -119,8 +120,8 @@ def run_case():
     print 'HOLL score: ' + str(holl_score)
 
 
-    fig.savefig('./results/uni_sincos_gp.pdf')
-    np.save('./results/uni_sincos_gp', config)
+    fig.savefig('../results/uni_sincos_gp.pdf')
+    np.save('../results/uni_sincos_gp', config)
     plot.show()
 
     print('Finished running case!')
