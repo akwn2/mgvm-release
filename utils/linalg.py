@@ -134,3 +134,7 @@ def get_sym_blocks(K):
     N = K.shape[0] / 2
 
     return K[0:N, 0:N], K[0:N, N:], K[N:, N:]
+
+
+def qform(x, a, y):
+    return np.dot(x.T, np.dot(a, y))

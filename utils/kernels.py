@@ -68,6 +68,31 @@ def se_iso(x, xp, params, get_gradients=False):
 
 
 @jit(cache=True)
+def pe_iso(x, xp, params, get_gradients=False):
+    """
+    compute a (isometric) periodic kernel
+    :param x: first kernel input
+    :param xp: second kernel input
+    :param params: dictionary with the kernel parameters s2 and ell2
+    :param get_gradients: option to yield gradients
+    :return:
+    """
+    dist = spdist.cdist(x, xp)
+    norm = 0.5 - 0.5 * np.cos(2. * dist / params['per']) ** 2
+
+    K = np.exp(- 0.5 * norm / params['ell2'])
+    if get_gradients:
+        grad = dict()
+        grad['s2'] = K
+        grad['ell2'] = params['s2'] * norm * K / (params['ell2'] ** 2)
+        grad['per'] = params['s2'] * norm * K / (2. * params['ell2'] * params['per'] ** 2) * np.sin(2. * dist /
+                                                                                                    params['per'])
+        return params['s2'] * K, grad
+    else:
+        return params['s2'] * K
+
+
+@jit(cache=True)
 def se_ard(x, xp, params, get_gradients=False):
     """
     compute an automatic relevance determination squared exponential kernel

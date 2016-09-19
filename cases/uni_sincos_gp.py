@@ -1,5 +1,3 @@
-import scipy.linalg as la
-import utils.kernels as kernels
 import gp.gp as gp
 import numpy as np
 import utils.circular as uc
@@ -16,9 +14,6 @@ def toy_fun(x):
 
 
 def run_case():
-
-    print('Case: Univariate example with mGvM model 1')
-
     x = np.linspace(0, 1, 100)
     y = toy_fun(x)
 
@@ -46,7 +41,7 @@ def run_case():
         'xi': x_t,
         'y': y_t,
     }
-    ell2 = 0.05 ** 2
+    ell2 = 1.15 ** 2
     s2 = 700.
     noise = 2.E-3
 
@@ -71,7 +66,7 @@ def run_case():
 
     print('--> Initialising model variables')
     t0 = time()
-    yp, var_yp = gp.predict(y_t, x_t, x_p, params, noise)
+    yp, var_yp = gp.predict_se_iso(y_t, x_t, x_p, params, noise)
     tf = time()
 
     print 'Total elapsed time in prediction: ' + str(tf - t0) + ' s'
@@ -82,7 +77,6 @@ def run_case():
 
     new_psi_p = np.angle(z_p)
     n_grid = 1000
-    # p, th = gp.get_predictive_for_plots_1d(new_psi_p, var_yp, res=n_grid)
     p, th = gp.get_predictive_for_wrapped(new_psi_p, var_yp, res=n_grid)
 
     # Predictions
@@ -98,32 +92,21 @@ def run_case():
     scaled_y_p = uc.cfix(new_psi_p) * scaling_y + offset_y
     scaled_x_v = x_v * scaling_x
     scaled_y_v = uc.cfix(psi_v) * scaling_y + offset_y
-    # scaled_mode = (mode + np.pi) * 1000 / (2 * np.pi)
 
     # Now plot the optimised psi's and datapoints
-    # plt.plot(scaled_mode, 'go', ms=5.0, mew=0.1)  # mode of predictive
     plot.plot(scaled_x_p, scaled_y_p, 'c.')  # optimised prediction
     plot.plot(scaled_x_t, scaled_y_t, 'xk', mew=2.0)  # training set
     plot.plot(scaled_x_v, scaled_y_v, 'ob', fillstyle='none')  # held out set
 
     plot.ylabel('Regressed variable $(\psi)$')
     plot.xlabel('Input variable $(x)$')
-    plot.legend(['$\mathbb{E}[\phi^*]$', '$\psi$', '$f(x)$'], fontsize=7)
     plot.tight_layout()
     plot.grid(True)
 
     holl_score = 0.
-    for ii in xrange(0, psi_v.shape[0]):
-        holl_score += np.sum(np.exp(-0.5 * (np.cos(psi_v[ii]) - yp[ii, 0]) ** 2 / s2_p) / np.sqrt(np.pi * 2. * s2_p) +
-                             np.exp(-0.5 * (np.sin(psi_v[ii]) - yp[ii, 1]) ** 2 / s2_p) / np.sqrt(np.pi * 2. * s2_p))
-
+    for ii in xrange(0, n_pred):
+        holl_score += uc.loglik_gp2circle(psi_v[ii], yp[ii], s2_p[ii])
     print 'HOLL score: ' + str(holl_score)
-
-
-    fig.savefig('../results/uni_sincos_gp.pdf')
-    np.save('../results/uni_sincos_gp', config)
-    plot.show()
-
     print('Finished running case!')
 
 if __name__ == '__main__':

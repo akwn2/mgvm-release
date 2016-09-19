@@ -3,8 +3,10 @@ cutil.py
 circular stats utility functions
 """
 import numpy as np
-import scipy as sp
+import linalg as ula
 from scipy.special import ive
+from scipy.stats import norm as gaussian
+from scipy.stats import multivariate_normal as mgaussian
 
 
 # General auxiliary functions
@@ -55,7 +57,7 @@ def log_iv(nu, z):
     :param z: modified bessel function argument
     :return:
     """
-    return z + sp.log(ive(nu, z))
+    return z + np.log(ive(nu, z))
 
 
 def inv_log_iv(nu, log_val):
@@ -106,19 +108,14 @@ def quartic(a, b, c, d, e):
     return np.roots([a, b, c, d, e])
 
 
-def rmse(y, p, th, n_bins=20):
+def cmse(y, m):
+    # Circular-mean-squared error
+    return 1 - np.cos(cmean(y - m))
 
-    hist, bins = np.histogram(y, bins=n_bins, range=(0, 2 * np.pi))
-    scale_factor = np.max(hist) / np.max(p)
 
-    # Compute RMSE
-    aux = 0.
-    for nn in xrange(0, bins.shape[0] - 1):
-        idx = np.logical_and(th >= bins[nn], th <= bins[nn + 1]).flatten()
-        if np.alen(p[idx]) > 0:
-            aux += np.sum((hist[nn] - p[idx] * scale_factor) ** 2)
-
-    return np.sqrt(aux / bins.shape[0])
+def mce(y, m):
+    # Mean cosine error
+    return (np.cos(y) - np.cos(m)) ** 2 + (np.sin(y) - np.sin(m)) ** 2
 
 
 def holl(psi, m1, m2, k1, k2, N=1):
@@ -127,3 +124,60 @@ def holl(psi, m1, m2, k1, k2, N=1):
             np.sum(k1 * np.cos(psi - m1) + k2 * np.cos(2. * (psi - m2)))
 
     return score
+
+
+def gvm_sample(m1, m2, k1, k2, res=5000, max_reject=250):
+    # Sampling from a gvm using rejection sampling
+
+    # Find the supremum of the unnormalised density to create a bounding box
+    omega = np.linspace(-np.pi, np.pi, res).reshape(res, 1)
+    g = k1 * np.cos(omega - m1) + k2 * np.cos(2. * (omega - m2))
+    max_g = np.max(g)
+
+    accepted = False
+    rejections = 0
+    th = 0.
+    while not accepted and rejections < max_reject:
+        rejections += 1
+
+        th = 2. * np.pi * np.random.rand(1, 1) - np.pi # pick a point in the unit circle
+        w = k1 * np.cos(th - m1) + k2 * np.cos(2. * (th - m2)) # height of the unnormalized density
+        log_u = max_g + np.log(np.random.rand(1, 1) + 1E-12)  # height of the bounding box w/ offset to avoid log(0)
+
+        accepted = log_u <= w  # here we took the log of both sides
+
+    if rejections > max_reject:
+        print 'Exceeded maximum number of rejections'
+        raise ValueError
+    else:
+        return th
+
+
+def loglik_gp2circle(psi, psi_p, s2):
+    """
+    log likelihood for a GP in 2 dimensions projected back to the unit circle (projected normal)
+    :param psi: data
+    :param psi_p: predictions
+    :param s2: variance
+    :return:
+    """
+
+    inv_cov = np.array([[1. / s2, 0.],
+                        [0., 1. / s2]])
+    root_inv_cov_det = s2
+    v_psi = np.array([[np.cos(psi)],
+                      [np.sin(psi)]])
+    mu = np.array([[psi_p[0]],
+                   [psi_p[1]]])
+
+    norm = ula.qform(v_psi, inv_cov, v_psi) ** 0.5
+    d_term = ula.qform(mu, inv_cov, v_psi) / norm
+    mu_exterior_x = mu[0] * v_psi[1] - mu[1] * v_psi[0]
+
+    std_cdf_term = gaussian.cdf(d_term)
+    cov_pdf_term = np.exp(ula.qform(mu, inv_cov, mu)) / (2. * np.pi * s2)
+    std_pdf_term = np.exp(- 0.5 * (mu_exterior_x * root_inv_cov_det / norm) ** 2) / (2 * np.pi) ** 0.5
+
+    log_lik = np.log(cov_pdf_term + root_inv_cov_det * d_term * std_cdf_term * std_pdf_term) - 2. * np.log(norm)
+
+    return log_lik

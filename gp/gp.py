@@ -8,12 +8,34 @@ import utils.kernels as kernels
 import utils.linalg as la
 
 
-def predict(y, xi, xp, params, noise):
+def predict_se_iso(y, xi, xp, params, noise):
 
     # Covariance bits
     mat_k_xi_xi = kernels.se_iso(xi, xi, params)
     mat_k_xi_xp = kernels.se_iso(xi, xp, params)
     mat_k_xp_xp = kernels.se_iso(xp, xp, params)
+
+    # Noise addition
+    mat_k_xi_xi += noise * np.eye(mat_k_xi_xi.shape[0])
+
+    # Expected values
+    mat_ell, jitter = la.rchol(mat_k_xi_xi)
+    a = la.inv_mult_chol(mat_ell, y)
+    yp = np.dot(mat_k_xi_xp.T, a)
+
+    # Variances
+    v = la.solve_chol(mat_ell, mat_k_xi_xp)
+    var_yp = mat_k_xp_xp - np.dot(v.T, v)
+
+    return yp, var_yp
+
+
+def predict_pe_iso(y, xi, xp, params, noise):
+
+    # Covariance bits
+    mat_k_xi_xi = kernels.pe_iso(xi, xi, params)
+    mat_k_xi_xp = kernels.pe_iso(xi, xp, params)
+    mat_k_xp_xp = kernels.pe_iso(xp, xp, params)
 
     # Noise addition
     mat_k_xi_xi += noise * np.eye(mat_k_xi_xi.shape[0])
@@ -92,6 +114,80 @@ def se_iso_model_grad(hyp, config):
 
 def learning_se_iso(hyp0, config):
     return so.minimize(fun=se_iso_model_obj, x0=hyp0, args=config, method='L-BFGS-B', jac=se_iso_model_grad)
+
+
+def pe_iso_model_obj(hyp, config):
+    xi = config['xi']
+    y = config['y']
+
+    ell2 = np.exp(hyp[0])
+    s2 = np.exp(hyp[1])
+    per = np.exp(hyp[2])
+    noise = np.exp(hyp[3])
+
+    params = {
+        's2': s2,
+        'ell2': ell2,
+        'per': per
+    }
+    mat_k = kernels.pe_iso(xi, xi, params)
+    mat_k += noise * np.eye(mat_k.shape[0])
+
+    mat_ell, jitter = la.rchol(mat_k)
+    a = la.inv_mult_chol(mat_ell, y)
+
+    # Compute objective
+    obj = -0.5 * np.sum(np.dot(y.T, a)) - np.sum(np.log(np.diag(mat_ell))) - 0.5 * y.shape[0] * np.log(2. * np.pi)
+
+    return - obj.flatten()
+
+
+def pe_iso_model_grad(hyp, config):
+
+    xi = config['xi']
+    y = config['y']
+
+    ell2 = np.exp(hyp[0])
+    s2 = np.exp(hyp[1])
+    per = np.exp(hyp[2])
+    noise = np.exp(hyp[3])
+
+    params = {
+        's2': s2,
+        'ell2': ell2,
+        'per': per
+    }
+    mat_k, grad = kernels.pe_iso(xi, xi, params, get_gradients=True)
+    mat_k += noise * np.eye(mat_k.shape[0])
+    mat_ell, jitter = la.rchol(mat_k)
+
+    a = la.inv_mult_chol(mat_ell, y)
+    aa_t = np.dot(a, a.T)
+
+    # Compute gradients
+    dell2 = 0.5 * np.trace(np.dot(aa_t, grad['ell2']) -
+                           la.inv_mult_chol(mat_ell, grad['ell2']))
+
+    ds2 = 0.5 * np.trace(np.dot(aa_t, grad['s2']) -
+                         la.inv_mult_chol(mat_ell, grad['s2']))
+
+    dper = 0.5 * np.trace(np.dot(aa_t, grad['per']) -
+                         la.inv_mult_chol(mat_ell, grad['per']))
+
+    dnoise = 0.5 * np.trace(np.dot(aa_t, np.eye(mat_ell.shape[0])) -
+                            la.inv_mult_chol(mat_ell, np.eye(mat_ell.shape[0])))
+    # Pack gradients
+    grad = np.zeros([4, 1])
+    grad[0] = dell2 * ell2
+    grad[1] = ds2 * s2
+    grad[2] = dper * per
+    grad[3] = dnoise * noise
+
+    return - grad.flatten()
+
+
+def learning_pe_iso(hyp0, config):
+    return so.minimize(fun=pe_iso_model_obj, x0=hyp0, args=config, method='L-BFGS-B', jac=pe_iso_model_grad)
 
 
 def get_predictive_for_plots_1d(yp, var_yp, res=1000):

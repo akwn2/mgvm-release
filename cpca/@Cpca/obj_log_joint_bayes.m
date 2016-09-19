@@ -1,0 +1,86 @@
+function nlogP = obj_log_joint_bayes(self, vararray)
+% obj_log_joint_bayes
+% Negative average log-joint function for free energy maximisation under 
+% the variational Bayes model.
+
+    self = self.unpack_from_array(vararray, 'variables', 'Fq');
+
+    % Pre-computable relations - Trigonometric terms - OK1
+    ccT = self.m_cos_phi.xv * self.m_cos_phi.xv' ...
+        + diag(- diag(self.m_cos_phi.xv * self.m_cos_phi.xv') ...
+               + sum(self.m_cos2_phi.xv, 2));
+
+    scT = self.m_sin_phi.xv * self.m_cos_phi.xv' ...
+        + diag(- diag(self.m_sin_phi.xv * self.m_cos_phi.xv') ...
+               + sum(self.m_sincos_phi.xv, 2));
+
+    ssT = self.m_sin_phi.xv * self.m_sin_phi.xv' ...
+        + diag(- diag(self.m_sin_phi.xv * self.m_sin_phi.xv') ...
+               + sum(self.m_sin2_phi.xv, 2));
+
+
+    % PRIOR TERMS
+    %-------------------------------------------------
+    % Priors for the ARD components - OK1
+    prior_alph2 = self.p_a_alph2.xv .* log(self.p_b_alph2.xv) ...
+                - gammaln(self.p_a_alph2.xv) ...
+                + (self.p_a_alph2.xv - 1) .* log(self.m_alph2.xv) ...
+                - self.p_b_alph2.xv .* self.m_alph2.xv;
+
+    prior_beta2 = self.p_a_beta2.xv .* log(self.p_b_beta2.xv) ...
+                - gammaln(self.p_a_beta2.xv) ...
+                + (self.p_a_beta2.xv - 1) .* log(self.m_beta2.xv) ...
+                - self.p_b_beta2.xv .* self.m_beta2.xv;
+
+    % Prior for model precision - OK1
+    prior_prc2 = self.p_a_prc2.xv * log(self.p_b_prc2.xv) ...
+               - gammaln(self.p_a_prc2.xv) + ...
+               + (self.p_a_prc2.xv - 1) * log(self.m_prc2.xv) ...
+               - self.p_b_prc2.xv .* self.m_prc2.xv;
+
+    % ARD priors for the coefficient and offsets - OK1
+    prior_A = + 0.5 * self.M * sum(log(self.m_alph2.xv(:)) ) ...
+              - 0.5 * trace(self.m_AA.xv * diag(self.m_alph2.xv));
+
+    prior_B = + 0.5 * self.M * sum( log(self.m_beta2.xv(:)) ) ...
+              - 0.5 * trace(self.m_BB.xv * diag(self.m_beta2.xv));
+
+    % Prior for latent angles - OK1
+    prior_phi = - self.N * log(2 * pi)...
+                - self.N * sum(log_iv(0, self.p_kappa.xv)) ...
+                + sum(self.p_kappa.xv' * self.m_cos_phi.xv);                    
+
+    % Aggregate prior terms
+    priors = prior_A + prior_B ...
+           + sum(prior_alph2 + prior_beta2) ...
+           + prior_phi + prior_prc2;
+
+
+    % LIKELIHOOD TERM
+    %------------------------------------------
+
+    % Model predictions
+    modelPred = self.m_A.xv * self.m_cos_phi.xv ...
+              + self.m_B.xv * self.m_sin_phi.xv;
+
+    % Norm within the Likelihood term
+    normTerm = self.trYYT - 2 * trace(modelPred * self.Y') ...
+             + trace(self.m_AA.xv * ccT + 2 * self.m_AB.xv * scT ...
+                   + self.m_BB.xv * ssT);
+
+    likelihood = - 0.5 * self.N * self.M * log(2 * pi) ...
+                 + 0.5 * self.N * self.M * log(self.m_prc2.xv)...
+                 - 0.5 * self.m_prc2.xv * normTerm;
+
+
+    % AGREGATE TERMS FOR AVERAGE LOG JOINT
+    %-----------------------------------------
+    logP = likelihood + priors;
+    nlogP = -logP;
+
+    % Checking for numerical errors
+    if isinf(nlogP) || isnan(nlogP) || ~isreal(nlogP)
+        fprintf('Invalid token detected in obj_LogP\n');
+        keyboard;
+    end
+end

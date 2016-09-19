@@ -1,0 +1,53 @@
+function self = sample_phi_point(self)
+% sample_phi_point
+% Sample the latent angles conditioned on all other variables for the point
+% estimate model. This has the form of a Generalised von Mises distribution
+
+    if self.verbose 
+        fprintf('\tSampling phi.\n');
+    end
+
+    for dd = 1:self.D
+        rhs1 = self.p_kappa(dd) .* self.m_cos_phi(dd)...
+               - 0.5 * self.p_prc2 * self.p_A(:, dd)' * ...
+                            (2 * (C - self.Y) ...
+                           + 2 * self.p_A(:, 1:self.D ~= dd) *...
+                                 self.m_cos_phi(1:self.D ~= dd,:) ...
+                           + 2 * self.p_B(:, 1:self.D ~= dd) *...
+                                 self.m_sin_phi(1:self.D ~= dd,:));
+
+
+        rhs2 = self.p_kappa(dd) .* ...
+               - 0.5 * self.p_prc2 * self.p_B(:, dd)' * ...
+                            (2 * (C - self.Y) ...
+                           + 2 * self.p_B(:, 1:self.D ~= dd) *...
+                                 self.m_sin_phi(1:self.D ~= dd,:) ...
+                           + 2 * self.p_A(:, 1:self.D ~= dd) *...
+                                 self.m_cos_phi(1:self.D ~= dd,:));
+
+        rhs3 = - 0.25 * self.p_prc2 *...
+                            (self.p_A(:, dd)' * self.p_A(:, dd) ...
+                            -self.p_B(:, dd)' * self.p_B(:, dd));
+
+        rhs4 = - 0.5 * self.p_prc2 *...
+                            self.p_A(:, dd)' * self.p_B(:, dd);
+
+        % Calculate distribution parameters
+        z1 = rhs1 + 1.0i * rhs2;
+        z2 = rhs3 + 1.0i * rhs4;
+
+        self.q_phi_k1(dd, :) = abs(z1);
+        self.q_phi_k2(dd, :) = abs(z2);
+        self.q_phi_m1(dd, :) = angle(z1);
+        self.q_phi_m2(dd, :) = 0.5 * angle(z2);
+
+        % Sample
+        self.s_phi(dd, :) = gvmrand(self.q_phi_k1(dd, :), self.q_phi_k2(dd, :), ...
+                                  self.q_phi_m1(dd, :), self.q_phi_m2(dd, :));
+
+        % Update sine and cosine terms
+        self.m_cos_phi(dd, :) = cos(self.s_phi(dd, :));
+        self.m_sin_phi(dd, :) = sin(self.s_phi(dd, :));
+    end
+end
+

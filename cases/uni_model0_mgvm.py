@@ -1,6 +1,7 @@
 import scipy.linalg as la
 import utils.kernels as kernels
-import simple.mgvm_vi
+import mgvm.vi
+
 import numpy as np
 import utils.circular as uc
 import utils.plotting as plot
@@ -16,9 +17,6 @@ def toy_fun(x):
 
 
 def run_case():
-
-    print('Case: Univariate example with mGvM model 1')
-
     print('--> Create training set')
     x = np.linspace(0, 1, 100)
     y = toy_fun(x)
@@ -44,11 +42,6 @@ def run_case():
     k1 = np.array([[10.]])
     k2 = np.array([[0.]])
 
-    # noise = 5.E-2
-    # params = {
-    #     's2': 650.00,
-    #     'ell2': 2.50E-1 ** 2,
-    # }
     y_t = y_t.reshape(n_data, 1)
     x_t = x_t.reshape(n_data, 1)
     x_p = x_p.reshape(grid_pts, 1)
@@ -95,7 +88,7 @@ def run_case():
 
     print('--> Starting optimisation')
     t0 = time()
-    results = simple.mgvm_vi.inference_model_0_opt(xin, config)
+    results = mgvm.vi.inference_model_opt(xin, config)
     tf = time()
 
     print 'Total elapsed time: ' + str(tf - t0) + ' s'
@@ -111,7 +104,7 @@ def run_case():
     print('--> Saving and displaying results')
 
     # First the heatmap in the background
-    p, th = simple.mgvm_vi.predictive_dist(n_pred, new_mf_k1, new_mf_m1, k1, 0., pi_shift=True)
+    p, th = mgvm.vi.predictive_dist(n_pred, new_mf_k1, new_mf_m1, k1, 0., pi_shift=True)
     fig, scaling_x, scaling_y, offset_y = plot.circular_error_bars(th, p, True)
 
     scaled_x_t = x_t * scaling_x
@@ -122,7 +115,6 @@ def run_case():
     scaled_y_p = uc.cfix(new_psi_p) * scaling_y + offset_y
 
     # Now plot the optimised psi's and datapoints
-    # plt.plot(scaled_mode, 'go', ms=5.0, mew=0.1)  # mode of predictive
     plot.plot(scaled_x_p, scaled_y_p, 'c.')  # optimised prediction
     plot.plot(scaled_x_t, scaled_y_t, 'xk', mew=2.)  # training set
     plot.plot(scaled_x_v, scaled_y_v, 'ob', fillstyle='none')  # training set
@@ -130,7 +122,6 @@ def run_case():
     plot.xticks([0, 20, 40, 60, 80, 100], ['0.0', '0.2', '0.4', '0.6', '0.8', '1.0'])
     plot.ylabel('Regressed variable $(\psi)$')
     plot.xlabel('Input variable $(x)$')
-    plot.legend(['$\mathbb{E}[\phi^*]$', '$\psi$', '$f(x)$'], fontsize=7)
     plot.tight_layout()
 
     holl_score = 0.
@@ -138,11 +129,6 @@ def run_case():
         holl_score += uc.holl(y_v[ii], new_psi_p[ii], 0, k1, 0)
 
     print 'HOLL Score: ' + str(holl_score)
-
-    fig.savefig('../results/uni_model0_mgvm.pdf')
-    np.save('../results/uni_model0_mgvm', (results, config))
-    plot.show()
-
     print('Finished running case!')
 
 if __name__ == '__main__':
